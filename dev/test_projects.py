@@ -92,4 +92,13 @@ check("missing folder gives a clear error", raises(lambda: api.root(), 404))
 check("can't switch to a missing folder", raises(lambda: api.activate_project(api.ProjId(id=ids["Course"])), 404))
 api.activate_project(api.ProjId(id=ids["Sample reel"]))
 check("old /config root still works (adds a project)", api.set_config(api.ConfBody(root=str(work / "Course moved")))["name"] == "Course moved")
+# an interrupted take is rebuilt but keeps its place (its own time, not "now")
+import time as _t
+tk = reels / "Sample reel" / "voiceover" / "takes"
+raw = tk / "2026-01-01 1100 take 02.wav.recording"; raw.write_bytes(b"\0" * 4800); (tk / (raw.name + ".rate")).write_text("48000")
+os.utime(raw, (_t.time() - 86400, _t.time() - 86400))
+api.activate_project(api.ProjId(id=ids["Sample reel"]))
+names = [t["name"] for t in api.takes()["takes"]]
+check("interrupted take rebuilt", "2026-01-01 1100 take 02 (recovered).wav" in names and not raw.exists(), names)
+check("rebuilt take keeps its place in the list", names[-1] == "2026-01-01 1100 take 02 (recovered).wav", names)
 print(f"{ok} passed, {fail} failed")

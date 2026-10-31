@@ -173,9 +173,11 @@ def recover(folder: Path) -> None:
             continue
         rate_f = Path(str(raw) + ".rate")
         rate = int(rate_f.read_text()) if rate_f.exists() else 48000
+        when = raw.stat().st_mtime                  # last audio written: keeps the take in its place in the list
         data = raw.read_bytes()
         fin = Path(str(raw)[: -len(".wav.recording")] + " (recovered).wav")
         fin.write_bytes(wav_header(len(data), rate) + data)
+        os.utime(fin, (when, when))
         raw.unlink()
         rate_f.unlink(missing_ok=True)
 
