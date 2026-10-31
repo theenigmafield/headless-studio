@@ -6,6 +6,17 @@ with notes and a starred pick, without leaving the chat.
 
 ## What it does
 
+**Projects (tabs)**
+- Every folder you work in is a project, shown as a tab across the top. Click a tab to switch.
+- Each project remembers its own script, take folder and last open folder, so switching back puts
+  you where you left off.
+- **＋ Projects** opens a folder (native picker or a pasted path) and lists recent projects, newest
+  first. Close a tab with × and it stays in Recent; Forget removes it from the list without touching
+  any files. Double-click a tab to rename it.
+- New folders get sensible defaults: takes go to `voiceover/takes` if the folder has a `voiceover`
+  folder, otherwise `takes`; the script is the first `.md` or `.txt` in `script/` or `scripts/`.
+- You cannot switch projects in the middle of a take. One project list is shared by every Hermes profile.
+
 **Teleprompter**
 - Auto-scroll paced in words per minute (70 to 230), with a breath pause after each line.
 - A reading line, the current line lit and the rest dimmed, and a time-left estimate.
@@ -26,6 +37,7 @@ with notes and a starred pick, without leaving the chat.
 **Takes (like Voice Memos)**
 - Newest first, play back, rename, a note per take, star the take to use, move to Bin.
 - Notes and stars live in `takes-notes.json` beside the takes, so they travel with the project.
+- The take folder is created on the first recording, never just by opening a project.
 
 **Sound (macOS)**
 - Input and output device, Mac input and output volume, mute, and a shortcut to Sound settings.
@@ -88,7 +100,7 @@ plugin.yaml, __init__.py      agent half: the studio_takes tool
 dashboard/plugin_api.py       backend routes at /api/plugins/headless-studio/
 desktop/plugin.js             the studio UI (plain ESM, no build step)
 assets/                       Lexend reading font (SIL OFL 1.1)
-dev/                          browser harness and end-to-end test
+dev/                          browser harness, end-to-end test, backend project test
 ```
 
 ## Develop
@@ -99,6 +111,8 @@ HERMES_HOME=/tmp/hs-home ~/.hermes/hermes-agent/venv/bin/python dev/harness.py -
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --remote-debugging-port=9334 \
   --user-data-dir=/tmp/hs-chrome --use-fake-device-for-media-stream --use-fake-ui-for-media-stream about:blank
 node dev/e2e.mjs 9334 http://127.0.0.1:8790/ /tmp/hs-shots /tmp/hs-root
+# backend project logic on its own (no browser):
+~/.hermes/hermes-agent/venv/bin/python dev/test_projects.py . /tmp/hs-projects
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [ROADMAP.md](ROADMAP.md).

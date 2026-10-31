@@ -6,7 +6,7 @@ import * as React from 'react'
 import { jsx } from 'react/jsx-runtime'
 
 const ID = 'headless-studio'
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 let CTX = null
 let studio = null // one studio per window; the pane and the page share it
 
@@ -52,6 +52,24 @@ const CSS = `
 .hs .note { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--ui-stroke-secondary); color: var(--ui-text-tertiary); }
 .hs .note.warn { border-color: var(--ui-red); color: var(--ui-text-primary); }
 .hs .tabs { display: flex; gap: 4px; }
+/* project tabs */
+.hs .ptabs { display: flex; align-items: center; gap: 4px; min-height: 28px; }
+.hs .plist { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 0 1 auto; }
+.hs .plist::-webkit-scrollbar { display: none; }
+.hs .ptab { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; padding: 3px 4px 3px 10px; border-radius: 8px 8px 3px 3px; }
+.hs .ptab .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs .ptab .px { opacity: 0; border: 0; padding: 0 4px; line-height: 1; font-size: 14px; }
+.hs .ptab:hover .px, .hs .ptab.on .px { opacity: .7; } .hs .ptab .px:hover { opacity: 1; color: var(--ui-red); }
+.hs .ptab.gone .pn { text-decoration: line-through; opacity: .6; }
+.hs .ptab input { font: inherit; width: 140px; color: var(--ui-text-primary); background: transparent; border: 0; outline: none; }
+.hs .padd { padding: 3px 9px; flex: none; } .hs .pmenu { position: absolute; z-index: 30; top: 40px; left: 8px; width: min(420px, calc(100% - 16px));
+  max-height: 70%; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--ui-bg-elevated, var(--ui-bg-primary, #1d1d20));
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.hs .pmenu .sec { margin-top: 4px; } .hs .pmenu .prow { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 7px; cursor: pointer; }
+.hs .pmenu .prow:hover { background: var(--ui-stroke-tertiary); } .hs .pmenu .prow .pi { flex: 1; min-width: 0; }
+.hs .pmenu .prow .pp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.hs .pmenu input.ppath { flex: 1; min-width: 120px; font: inherit; color: var(--ui-text-primary); background: transparent; border: 1px solid var(--ui-stroke-secondary); border-radius: 7px; padding: 3px 6px; }
+.hs .pmenu .forget { border-color: transparent; font-size: 11px; }
 .hs .tabs button { flex: 1; border-color: transparent; }
 .hs .tabs button.on { border-color: var(--ui-stroke-secondary); background: var(--ui-stroke-tertiary); font-weight: 600; }
 .hs .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; grid-template-rows: auto 1fr; gap: 8px; }
@@ -119,7 +137,7 @@ const CSS = `
 .hs .eyeline { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed color-mix(in oklab, var(--ui-accent) 55%, transparent); pointer-events: none; z-index: 5; }
 .hs .eyeline span { position: absolute; left: 2px; top: -10px; color: var(--ui-accent); font-size: 13px; }
 .hs .countdown { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 110px; font-weight: 800; color: var(--ui-accent); z-index: 15; background: color-mix(in oklab, var(--ui-bg-editor, black) 55%, transparent); }
-.hs.focus .bar, .hs.focus .maintabs, .hs.focus .left, .hs.focus .view .head { display: none !important; }
+.hs.focus .bar, .hs.focus .ptabs, .hs.focus .maintabs, .hs.focus .left, .hs.focus .view .head { display: none !important; }
 .hs.focus .main { grid-template-columns: 1fr !important; }
 .hs.focus .view { display: flex !important; }
 .hs .empty { padding: 18px; text-align: center; color: var(--ui-text-tertiary); }
@@ -173,6 +191,9 @@ class Studio {
   build() {
     const st = document.createElement('style'); st.textContent = CSS; this.el.appendChild(st)
     this.el.insertAdjacentHTML('beforeend', `
+      <div class="ptabs" role="tablist" aria-label="Projects"><div class="plist"></div>
+        <button class="padd" title="Projects: open a folder or go back to a recent one">＋ Projects</button></div>
+      <div class="card pmenu" style="display:none"></div>
       <div class="card bar">
         <div class="rows">
           <div class="row"><span class="sec">🎙 Input</span><select class="dev" title="Microphone"></select>
@@ -182,8 +203,7 @@ class Studio {
             <span class="row" style="gap:5px" title="Mac output volume"><input class="ovol" type="range" min="0" max="100" style="width:72px"><span class="num ovt">--</span></span>
             <button class="mute">Mute</button><span class="sp"></span><button class="sysset">Sound settings</button></div>
           <div class="row"><span class="sec">💾 Saves to</span><span class="dest tiny mut" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-            <button class="here" title="Save new takes into the folder open in Files">Use open folder</button><span class="sp"></span><button class="cfg" title="Studio folder">⚙</button></div>
-          <div class="row cfgrow" style="display:none"><span class="sec">📁 Folder</span><input class="rootin" style="flex:1;min-width:160px;font:inherit;color:var(--ui-text-primary);background:transparent;border:1px solid var(--ui-stroke-secondary);border-radius:7px;padding:3px 6px" placeholder="/Users/you/Projects/My reels"><button class="rootsave">Save</button></div>
+            <button class="here" title="Save new takes into the folder open in Files">Use open folder</button></div>
           <div class="st tiny mut" style="min-height:14px"></div>
         </div>
         <div class="recbox">
@@ -208,8 +228,9 @@ class Studio {
     this.$('.ovol').onchange = () => this.setSound({ output_volume: +this.$('.ovol').value })
     this.$('.mute').onclick = () => this.setSound({ muted: !this.state.sound.muted })
     this.$('.sysset').onclick = () => rest('/sound/settings', { method: 'POST', body: {} })
-    this.$('.here').onclick = () => { this.state.dest = this.state.cwd; CTX.storage.set('dest', this.state.dest); this.showDest(); this.loadTakes(); this.status('New takes save to ' + (this.state.dest || 'the studio folder')) }
-    this.$('.cfg').onclick = () => this.configure()
+    this.$('.here').onclick = () => { this.state.dest = this.state.cwd; this.remember({ default_dest: this.state.dest }); this.showDest(); this.loadTakes(); this.status('New takes save to ' + (this.state.dest || 'the project folder')) }
+    this.$('.padd').onclick = ev => { ev.stopPropagation(); this.projectMenu() }
+    this.el.addEventListener('mousedown', ev => { const m = this.$('.pmenu'); if (m.style.display !== 'none' && !m.contains(ev.target) && !ev.target.closest('.padd')) m.style.display = 'none' })
     this.$('.allow').onclick = () => this.startMic()
     this.$('.dev').onchange = () => { this.mic.running = false; this.startMic(this.$('.dev').value) }
     this.$('.out').onchange = () => { this.sinkId = this.$('.out').value; this.applySink() }
@@ -225,10 +246,11 @@ class Studio {
     if (this.booted) return
     this.booted = true
     try {
+      await this.loadProjects()
       const cfg = await rest('/config')
       this.cfg = cfg
-      this.state.dest = CTX.storage.get('dest', null) ?? cfg.default_dest
-      this.state.cwd = CTX.storage.get('cwd', '') || ''
+      this.state.dest = cfg.default_dest
+      this.state.cwd = cfg.last_dir || ''
       this.showDest()
     } catch (e) {
       this.booted = false
@@ -238,10 +260,7 @@ class Studio {
     }
     this.loadFont()
     this.loadSound()
-    this.openDir(this.state.cwd)
-    this.loadTakes()
-    const script = CTX.storage.get('script', null) || this.cfg.default_script
-    if (script) this.openFile({ path: script, name: script.split('/').pop() })
+    this.openProject()
     try { const p = await navigator.permissions.query({ name: 'microphone' }); if (p.state === 'granted') this.startMic() } catch {}
   }
 
@@ -251,20 +270,134 @@ class Studio {
     }
   }
 
-  showDest() { this.$('.dest').textContent = this.state.dest || '(studio folder)'; this.$('.dest').title = this.state.dest }
+  showDest() { this.$('.dest').textContent = this.state.dest || '(project folder)'; this.$('.dest').title = this.state.dest }
 
-  configure() {
-    const row = this.$('.cfgrow'), inp = this.$('.rootin')
-    row.style.display = row.style.display === 'none' ? '' : 'none'
-    inp.value = this.cfg?.root || ''
-    inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') this.$('.rootsave').click() }
-    this.$('.rootsave').onclick = async () => {
-      try {
-        this.cfg = await rest('/config', { method: 'POST', body: { root: inp.value.trim() } })
-        this.state.cwd = ''; this.state.dest = this.cfg.default_dest; CTX.storage.set('cwd', ''); CTX.storage.set('dest', this.state.dest)
-        row.style.display = 'none'; this.showDest(); this.openDir(''); this.loadTakes(); this.status('Studio folder: ' + this.cfg.root_resolved)
-      } catch (e) { this.status(errText(e), true) }
+  /* ---------- projects: tabs plus recent folders ---------- */
+  // Each project is a folder that remembers its script, take folder and last open folder (shared config,
+  // so every Hermes profile sees the same list). Open projects show as tabs; closed ones stay in Recent.
+  async loadProjects(P) {
+    this.projects = P || (await rest('/projects'))
+    const list = this.$('.plist'); list.innerHTML = ''
+    const open = this.projects.projects.filter(p => p.open).sort((a, b) => a.seq - b.seq)
+    for (const p of open) {
+      const t = document.createElement('button')
+      t.className = 'ptab' + (p.active ? ' on' : '') + (p.exists ? '' : ' gone'); t.setAttribute('role', 'tab'); t.setAttribute('aria-selected', p.active)
+      t.title = `${p.name}\n${p.root}${p.exists ? '' : '\n(folder not found)'}\nDouble-click to rename`
+      t.innerHTML = `<span class="pn">${esc(p.name)}</span><span class="px" title="Close tab (stays in Recent)">×</span>`
+      t.onclick = ev => { if (ev.target.classList.contains('px')) return this.closeProject(p); if (!p.active) this.switchProject(p.id) }
+      t.ondblclick = ev => { if (!ev.target.classList.contains('px')) this.renameProject(p, t) }
+      list.appendChild(t)
     }
+    list.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    return this.projects
+  }
+
+  // Bring the Studio in line with the active project: folder, take folder, script.
+  async openProject() {
+    this.cfg = await rest('/config')
+    this.state.dest = this.cfg.default_dest || ''
+    this.state.selected = null; this.state.openTake = null
+    this.showDest()
+    await this.openDir(this.cfg.last_dir || '')
+    this.loadTakes()
+    const script = this.cfg.default_script
+    if (script) this.openFile({ path: script, name: script.split('/').pop() })
+    else { this.$('.vtitle').textContent = 'Open a script from Files'; this.$('.vtools').innerHTML = ''; this.$('.vbody').innerHTML = '<div class="empty">No script yet for this project. Pick one in Files.</div>' }
+  }
+
+  remember(fields) {
+    const id = this.cfg?.project; if (!id) return
+    Object.assign(this.cfg, fields)
+    rest('/projects/update', { method: 'POST', body: { id, ...fields } }).catch(() => {})
+  }
+
+  busy() {
+    if (this.rec.id) { this.status('Stop the recording before switching projects.', true); return true }
+    return false
+  }
+
+  async switchProject(id) {
+    if (this.busy()) return
+    this.$('.pmenu').style.display = 'none'
+    try {
+      this.tpTeardown()
+      await this.loadProjects(await rest('/projects/activate', { method: 'POST', body: { id } }))
+      await this.openProject()
+      this.status('Project: ' + this.cfg.name)
+    } catch (e) { this.status(errText(e), true); this.loadProjects() }
+  }
+
+  async addProject(path) {
+    if (!path || this.busy()) return
+    try {
+      this.tpTeardown()
+      await this.loadProjects(await rest('/projects/add', { method: 'POST', body: { path } }))
+      this.$('.pmenu').style.display = 'none'
+      await this.openProject()
+      this.status(`Project: ${this.cfg.name} · takes save to ${this.cfg.default_dest}` + (this.cfg.default_script ? '' : ' · pick a script in Files'))
+    } catch (e) { this.status(errText(e), true); const w = this.$('.pmenu .perr'); if (w) w.textContent = errText(e) }
+  }
+
+  async closeProject(p) {
+    if (p.active && this.busy()) return
+    try {
+      const P = await rest('/projects/update', { method: 'POST', body: { id: p.id, open: false } })
+      const was = this.cfg?.project
+      await this.loadProjects(P)
+      if (P.active !== was) { this.tpTeardown(); await this.openProject(); this.status(`Closed ${p.name}. It stays in Recent under ＋ Projects.`) }
+      else if (P.projects.find(x => x.id === p.id)?.open) this.status('The last open project stays as a tab. Open another one first.')
+      else this.status(`Closed ${p.name}. It stays in Recent under ＋ Projects.`)
+    } catch (e) { this.status(errText(e), true) }
+  }
+
+  renameProject(p, tab) {
+    const nm = tab.querySelector('.pn'); const inp = document.createElement('input'); inp.value = p.name
+    nm.replaceWith(inp); inp.focus(); inp.select()
+    const done = async ok => {
+      inp.onblur = null
+      if (ok && inp.value.trim() && inp.value.trim() !== p.name) {
+        try { await this.loadProjects(await rest('/projects/update', { method: 'POST', body: { id: p.id, name: inp.value.trim() } })); if (p.active) this.cfg.name = inp.value.trim(); return } catch (e) { this.status(errText(e), true) }
+      }
+      this.loadProjects()
+    }
+    inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false) }
+    inp.onblur = () => done(true); inp.onclick = e => e.stopPropagation()
+  }
+
+  async projectMenu() {
+    const m = this.$('.pmenu')
+    if (m.style.display !== 'none') { m.style.display = 'none'; return }
+    const P = await this.loadProjects()
+    const ago = t => { const d = (Date.now() / 1000 - t) / 86400; return d < 1 ? 'today' : d < 2 ? 'yesterday' : d < 30 ? Math.floor(d) + ' days ago' : new Date(t * 1000).toLocaleDateString() }
+    const recent = P.projects.filter(p => !p.active)
+    m.innerHTML = `
+      <div class="row"><button class="pick">📁 Open a folder…</button><span class="tiny mut">Any folder becomes a project. Takes and script are remembered per project.</span></div>
+      <div class="row"><input class="ppath" placeholder="or paste a folder path, then Enter"><button class="pgo">Open</button></div>
+      <div class="perr tiny" style="color:var(--ui-red)"></div>
+      <div class="sec">Recent projects</div>
+      <div class="prec">${recent.length ? '' : '<div class="empty tiny">Projects you open show up here, newest first.</div>'}</div>`
+    const rec = m.querySelector('.prec')
+    for (const p of recent) {
+      const r = document.createElement('div'); r.className = 'prow'
+      r.innerHTML = `<span class="codicon codicon-${p.open ? 'folder-opened' : 'folder'}"></span><span class="pi"><div>${esc(p.name)}${p.open ? ' <span class="tiny mut">· open tab</span>' : ''}${p.exists ? '' : ' <span class="tiny" style="color:var(--ui-red)">· folder missing</span>'}</div>
+        <div class="tiny mut pp" title="${esc(p.root)}">${esc(p.root)}</div></span><span class="tiny mut">${ago(p.opened || 0)}</span><button class="forget" title="Remove from this list. The folder and its files stay where they are.">Forget</button>`
+      r.onclick = ev => { if (!ev.target.classList.contains('forget')) this.switchProject(p.id) }
+      r.querySelector('.forget').onclick = async ev => {
+        ev.stopPropagation()
+        if (!r.dataset.sure) { r.dataset.sure = 1; ev.target.textContent = 'Sure?'; return }
+        try { await this.loadProjects(await rest('/projects/forget', { method: 'POST', body: { id: p.id } })); r.remove() } catch (e) { this.status(errText(e), true) }
+      }
+      rec.appendChild(r)
+    }
+    const inp = m.querySelector('.ppath')
+    inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') this.addProject(inp.value.trim()); if (e.key === 'Escape') m.style.display = 'none' }
+    m.querySelector('.pgo').onclick = () => this.addProject(inp.value.trim())
+    m.querySelector('.pick').onclick = async () => {
+      const picked = await CTX.os?.pickOpenPath?.({ title: 'Choose a project folder', directories: true, defaultPath: this.cfg?.root })
+      if (picked) this.addProject(picked)
+      else if (!CTX.os?.pickOpenPath) { m.querySelector('.perr').textContent = 'No folder picker in this Hermes build. Paste the path instead.'; inp.focus() }
+    }
+    m.style.display = ''
   }
 
   tab(t) {
@@ -282,9 +415,10 @@ class Studio {
   async openDir(p) {
     let d
     try { d = await rest('/list?path=' + q(p)) } catch (e) { if (p) return this.openDir(''); this.status(errText(e), true); return }
-    this.state.cwd = d.path; CTX.storage.set('cwd', d.path)
+    this.state.cwd = d.path
+    if (this.cfg && this.cfg.last_dir !== d.path) this.remember({ last_dir: d.path })
     const parts = d.path ? d.path.split('/') : []
-    this.$('.fcrumbs').innerHTML = `<a data-p="">Studio</a>` + parts.map((s, i) => ` / <a data-p="${esc(parts.slice(0, i + 1).join('/'))}">${esc(s)}</a>`).join('')
+    this.$('.fcrumbs').innerHTML = `<a data-p="">${esc(this.cfg?.name || 'Project')}</a>` + parts.map((s, i) => ` / <a data-p="${esc(parts.slice(0, i + 1).join('/'))}">${esc(s)}</a>`).join('')
     this.$('.fcrumbs').querySelectorAll('a').forEach(a => (a.onclick = () => this.openDir(a.dataset.p)))
     const list = this.$('.flist'); list.innerHTML = ''
     if (!d.entries.length) list.innerHTML = '<div class="empty">Empty folder</div>'
@@ -311,7 +445,7 @@ class Studio {
     try {
       if (/\.(md|txt|markdown)$/.test(n)) {
         const { text } = await rest('/text?path=' + q(e.path))
-        CTX.storage.set('script', e.path)
+        if (this.cfg && this.cfg.default_script !== e.path) this.remember({ default_script: e.path })
         this.renderReader(text, b)
       } else if (/\.(json|py|csv|srt|vtt|yaml|yml)$/.test(n)) {
         const { text } = await rest('/text?path=' + q(e.path)); const pre = document.createElement('pre'); pre.textContent = text; b.appendChild(pre)
@@ -327,7 +461,7 @@ class Studio {
   async loadTakes() {
     let d; const seq = (this.takesSeq = (this.takesSeq || 0) + 1)
     try { d = await rest('/takes?folder=' + q(this.state.dest)); if (seq !== this.takesSeq) return } catch (e) { this.$('.takes').innerHTML = `<div class="note warn" style="margin:8px">${esc(errText(e))}</div>`; return }
-    this.$('.takeshead').textContent = `${d.takes.length} take${d.takes.length === 1 ? '' : 's'} · ${(d.folder || 'studio folder').split('/').slice(-3).join(' / ')}`
+    this.$('.takeshead').textContent = `${d.takes.length} take${d.takes.length === 1 ? '' : 's'} · ${(d.folder || 'project folder').split('/').slice(-3).join(' / ')}`
     const box = this.$('.takes'); box.innerHTML = ''
     if (this.rec.id) box.insertAdjacentHTML('beforeend', `<div class="take live"><div class="r1"><span class="nm" style="color:var(--ui-red)">● Recording…</span><span class="meta livet"></span></div></div>`)
     if (!d.takes.length && !this.rec.id) box.innerHTML = '<div class="empty">No takes yet. Press Record.</div>'

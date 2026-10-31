@@ -35,6 +35,8 @@ export function makeCtx(id) {
     register: c => { contributions.push(c); return () => {} },
     registerMany: cs => { contributions.push(...cs); return () => {} },
     onDispose: fn => disposers.push(fn),
-    runAction: id => { console.log('runAction', id); return { ok: true } }
+    runAction: id => { console.log('runAction', id); return { ok: true } },
+    // native folder picker stand-in: tests set window.__pickPath (null = cancelled)
+    os: { pickOpenPath: async opts => { window.__pickOpts = opts; return window.__pickPath ?? null } }
   }
 }

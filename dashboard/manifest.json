@@ -3,7 +3,7 @@
   "label": "Headless Studio",
   "description": "Backend for the Headless Studio desktop plugin. It adds no dashboard tab.",
   "icon": "Mic",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "tab": { "hidden": true },
   "entry": "dist/index.js",
   "api": "plugin_api.py"

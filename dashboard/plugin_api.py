@@ -1,7 +1,7 @@
 """Headless Studio backend, mounted at ``/api/plugins/headless-studio/``.
 
-Runs inside the Hermes gateway. It reads and writes only inside the studio root folder
-(Settings: root), streams recordings to disk as they happen, and keeps per-take notes
+Runs inside the Hermes gateway. It reads and writes only inside the active project's folder
+(projects live in the shared config.json; each remembers its script, take folder and last open folder), streams recordings to disk as they happen, and keeps per-take notes
 in a ``takes-notes.json`` beside the takes. Sound controls use macOS AppleScript and
 report ``supported: false`` elsewhere.
 """
@@ -23,7 +23,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
-LOCK = threading.Lock()
+LOCK = threading.RLock()   # re-entrant: conf() reads the project list under it too
 REC: dict = {}
 AUDIO = re.compile(r"\.(wav|m4a|mp3|aac|aif|aiff|flac|ogg)$", re.I)
 IS_MAC = sys.platform == "darwin"
@@ -47,18 +47,73 @@ def _shared_home() -> Path:
 DATA = _shared_home() / "headless-studio"
 CONF = DATA / "config.json"
 DEFAULTS = {"root": str(Path.home() / "Headless Studio"), "default_dest": "takes", "default_script": ""}
+PROJ_KEYS = ("root", "default_dest", "default_script", "last_dir")
+
+
+# ---------- projects ----------
+# config.json: {"projects": [{id, name, root, default_dest, default_script, last_dir, open, opened}], "active": id}
+# Every project is its own folder with its own script, take folder and last open folder; "open" ones show as tabs.
+
+def _read() -> dict:
+    try:
+        return json.loads(CONF.read_text())
+    except Exception:
+        return {}
+
+
+def _write(c: dict) -> None:
+    DATA.mkdir(parents=True, exist_ok=True)
+    tmp = CONF.with_suffix(".tmp")
+    tmp.write_text(json.dumps(c, indent=1))
+    tmp.replace(CONF)
+
+
+def _migrate(c: dict) -> dict:
+    """0.2 kept one root/dest/script. Turn it into the first project, scoped to the project's own folder
+    when the take folder and the script share a top folder (Projects + "My reel/..." -> "My reel")."""
+    if "projects" in c:
+        return c
+    if not c.get("root"):
+        return {"projects": [], "active": None}
+    root_p = Path(os.path.expanduser(c["root"]))
+    dest, script = c.get("default_dest", "takes") or "", c.get("default_script", "") or ""
+    heads = {x.split("/", 1)[0] for x in (dest, script) if "/" in x}
+    if len(heads) == 1 and (root_p / next(iter(heads))).is_dir():
+        h = next(iter(heads))
+        root_p = root_p / h
+        dest = dest.split("/", 1)[1] if dest.startswith(h + "/") else dest
+        script = script.split("/", 1)[1] if script.startswith(h + "/") else script
+    pr = {"id": secrets.token_hex(4), "name": root_p.name, "root": str(root_p), "default_dest": dest,
+          "default_script": script, "last_dir": "", "open": True, "opened": time.time()}
+    return {"projects": [pr], "active": pr["id"]}
+
+
+def _state() -> dict:
+    with LOCK:
+        raw = _read()
+        c = _migrate(raw)
+        if c is not raw and c["projects"]:
+            _write(c)
+        return c
+
+
+def active_project() -> Optional[dict]:
+    c = _state()
+    return next((p for p in c["projects"] if p["id"] == c.get("active")), None)
 
 
 def conf() -> dict:
-    try:
-        return {**DEFAULTS, **json.loads(CONF.read_text())}
-    except Exception:
-        return dict(DEFAULTS)
+    p = active_project() or {}
+    return {**DEFAULTS, **{k: p[k] for k in PROJ_KEYS if p.get(k) is not None}, "project": p.get("id"), "name": p.get("name")}
 
 
 def root() -> Path:
-    r = Path(os.path.expanduser(conf()["root"])).resolve()
-    r.mkdir(parents=True, exist_ok=True)
+    c = conf()
+    r = Path(os.path.expanduser(c["root"])).resolve()
+    if not c.get("project"):               # no project yet: the default "Headless Studio" folder
+        r.mkdir(parents=True, exist_ok=True)
+    elif not r.is_dir():
+        raise HTTPException(404, f"the folder for {c.get('name')} is missing: {r}")
     return r
 
 
@@ -202,6 +257,24 @@ class ConfBody(BaseModel):
     default_script: Optional[str] = None
 
 
+class ProjAdd(BaseModel):
+    path: str
+    name: Optional[str] = None
+
+
+class ProjId(BaseModel):
+    id: str
+
+
+class ProjUpdate(BaseModel):
+    id: str
+    name: Optional[str] = None
+    open: Optional[bool] = None
+    default_dest: Optional[str] = None
+    default_script: Optional[str] = None
+    last_dir: Optional[str] = None
+
+
 class PathBody(BaseModel):
     path: str
 
@@ -253,6 +326,34 @@ def font() -> dict:
     return {"url": "data:font/ttf;base64," + base64.b64encode(f.read_bytes()).decode()}
 
 
+def _check_root(path: str) -> Path:
+    p = Path(os.path.expanduser(path.strip())).resolve()
+    if p == Path.home() or str(p) == "/" or _home().resolve() in [p, *p.parents] or _shared_home().resolve() in [p, *p.parents]:
+        raise HTTPException(400, "choose a project folder, not your home folder or Hermes' own folder")
+    if p.exists() and not p.is_dir():
+        raise HTTPException(400, "that is a file; choose its folder")
+    return p
+
+
+def _guess(p: Path) -> dict:
+    """Where takes go and which script to open, for a folder Studio has not seen before."""
+    dest = "voiceover/takes" if (p / "voiceover").is_dir() else "takes"
+    script = ""
+    for d in (p / "script", p / "scripts", p):
+        if d.is_dir():
+            cands = sorted(f for f in d.iterdir() if f.is_file() and f.suffix.lower() in (".md", ".txt") and not f.name.startswith("."))
+            pick = next((f for f in cands if re.search(r"read|script|prompt", f.name, re.I)), None) or (cands[0] if d != p and cands else None)
+            if pick:
+                script = pick.relative_to(p).as_posix()
+                break
+    return {"default_dest": dest, "default_script": script}
+
+
+def _busy() -> None:
+    if REC:
+        raise HTTPException(409, "a take is recording; stop it before switching projects")
+
+
 @router.get("/config")
 def get_config() -> dict:
     return {**conf(), "root_resolved": str(root())}
@@ -260,17 +361,106 @@ def get_config() -> dict:
 
 @router.post("/config")
 def set_config(body: ConfBody) -> dict:
-    c = conf()
-    for k, v in body.model_dump().items():
-        if v is not None:
-            c[k] = v
+    """Change the ACTIVE project's folder, take folder or script. A new folder is added as a project instead."""
     if body.root is not None:
-        p = Path(os.path.expanduser(body.root)).resolve()
-        if p == Path.home() or str(p) == "/" or _home().resolve() in [p, *p.parents]:
-            raise HTTPException(400, "choose a project folder, not your home folder or Hermes' own folder")
-    DATA.mkdir(parents=True, exist_ok=True)
-    CONF.write_text(json.dumps(c, indent=1))
+        add_project(ProjAdd(path=body.root))
+    with LOCK:
+        c = _migrate(_read())
+        p = next((x for x in c["projects"] if x["id"] == c.get("active")), None)
+        if p is None:
+            raise HTTPException(400, "add a project folder first")
+        for k in ("default_dest", "default_script"):
+            v = getattr(body, k)
+            if v is not None:
+                p[k] = v
+        _write(c)
     return get_config()
+
+
+def _public(c: dict) -> dict:
+    out = []
+    seq = {p["id"]: i for i, p in enumerate(c["projects"])}     # tab order = order added
+    for p in sorted(c["projects"], key=lambda x: -x.get("opened", 0)):
+        out.append({**p, "seq": seq[p["id"]], "exists": Path(os.path.expanduser(p["root"])).is_dir(), "active": p["id"] == c.get("active")})
+    return {"active": c.get("active"), "projects": out, "recording": bool(REC)}
+
+
+@router.get("/projects")
+def projects() -> dict:
+    return _public(_state())
+
+
+@router.post("/projects/add")
+def add_project(body: ProjAdd) -> dict:
+    _busy()
+    p = _check_root(body.path)
+    if not p.is_dir():
+        raise HTTPException(404, "no such folder: " + str(p))
+    with LOCK:
+        c = _migrate(_read())
+        hit = next((x for x in c["projects"] if Path(os.path.expanduser(x["root"])).resolve() == p), None)
+        if hit is None:
+            hit = {"id": secrets.token_hex(4), "name": (body.name or p.name).strip()[:60], "root": str(p), "last_dir": "", **_guess(p)}
+            c["projects"].append(hit)
+        hit.update(open=True, opened=time.time())
+        c["active"] = hit["id"]
+        _write(c)
+        return _public(c)
+
+
+@router.post("/projects/activate")
+def activate_project(body: ProjId) -> dict:
+    _busy()
+    with LOCK:
+        c = _migrate(_read())
+        hit = next((x for x in c["projects"] if x["id"] == body.id), None)
+        if hit is None:
+            raise HTTPException(404, "unknown project")
+        if not Path(os.path.expanduser(hit["root"])).is_dir():
+            raise HTTPException(404, f"the folder for {hit['name']} is missing: {hit['root']}")
+        hit.update(open=True, opened=time.time())
+        c["active"] = hit["id"]
+        _write(c)
+        return _public(c)
+
+
+@router.post("/projects/update")
+def update_project(body: ProjUpdate) -> dict:
+    """Rename, close/reopen a tab, or remember the project's script / take folder / last open folder."""
+    with LOCK:
+        c = _migrate(_read())
+        hit = next((x for x in c["projects"] if x["id"] == body.id), None)
+        if hit is None:
+            raise HTTPException(404, "unknown project")
+        if body.name is not None and body.name.strip():
+            hit["name"] = body.name.strip()[:60]
+        for k in ("default_dest", "default_script", "last_dir"):
+            v = getattr(body, k)
+            if v is not None:
+                hit[k] = v
+        if body.open is not None:
+            hit["open"] = body.open
+            if not body.open and c.get("active") == hit["id"]:
+                if REC:
+                    raise HTTPException(409, "a take is recording; stop it before closing this project")
+                nxt = next((x for x in sorted(c["projects"], key=lambda x: -x.get("opened", 0)) if x.get("open") and x["id"] != hit["id"]), None)
+                c["active"] = nxt["id"] if nxt else hit["id"]
+                if nxt is None:
+                    hit["open"] = True          # the last tab stays open
+        _write(c)
+        return _public(c)
+
+
+@router.post("/projects/forget")
+def forget_project(body: ProjId) -> dict:
+    """Remove a project from the list. Its folder and files are not touched."""
+    with LOCK:
+        c = _migrate(_read())
+        if body.id == c.get("active"):
+            raise HTTPException(400, "switch to another project before forgetting this one")
+        c["projects"] = [x for x in c["projects"] if x["id"] != body.id]
+        _write(c)
+        return _public(c)
 
 
 @router.get("/list")
@@ -371,7 +561,8 @@ def open_sound_settings() -> dict:
 @router.get("/takes")
 def takes(folder: str = "") -> dict:
     f = safe(folder or conf()["default_dest"])
-    f.mkdir(parents=True, exist_ok=True)
+    if not f.is_dir():                     # created on the first recording, not by looking
+        return {"folder": rel(f), "takes": []}
     with LOCK:
         recover(f)
     notes, out = load_notes(f), []
@@ -440,7 +631,7 @@ def rec_start(body: StartBody) -> dict:
     raw.write_bytes(b"")
     Path(str(raw) + ".rate").write_text(str(int(body.rate)))
     rid = secrets.token_hex(6)
-    REC[rid] = {"raw": str(raw), "final": str(final), "seq": 0, "bytes": 0, "rate": int(body.rate)}
+    REC[rid] = {"raw": str(raw), "final": str(final), "seq": 0, "bytes": 0, "rate": int(body.rate), "rel": rel(final)}
     return {"id": rid, "file": rel(final)}
 
 
@@ -474,7 +665,7 @@ def rec_finish(body: IdBody) -> dict:
         final.write_bytes(wav_header(len(data), r["rate"]) + data)
         raw.unlink(missing_ok=True)
         Path(str(raw) + ".rate").unlink(missing_ok=True)
-    return {"file": rel(final), "seconds": round(len(data) / 4 / r["rate"], 2)}
+    return {"file": r.get("rel") or rel(final), "seconds": round(len(data) / 4 / r["rate"], 2)}
 
 
 @router.post("/rec/discard")
