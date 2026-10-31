@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Headless Studio harness</title>
+<style>
+  :root { --ui-text-primary: #ecebf2; --ui-text-secondary: #c9c7d3; --ui-text-tertiary: #9a97a8; --ui-text-quaternary: #6f6c7c;
+    --ui-stroke-secondary: rgba(255,255,255,.14); --ui-stroke-tertiary: rgba(255,255,255,.08); --ui-accent: #e0a458;
+    --ui-red: #e5484d; --ui-green: #46b46e; --ui-bg-elevated: #1d1c24; --ui-bg-editor: #121117; }
+  html, body { margin: 0; height: 100%; background: var(--ui-bg-editor); font-family: -apple-system, system-ui, sans-serif; }
+  #wrap { display: flex; height: 100%; } #page { flex: 1; } #pane { width: 460px; border-left: 1px solid var(--ui-stroke-secondary); }
+  body.page-only #pane, body.pane-only #page { display: none; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "react": "https://esm.sh/react@19.1.0",
+  "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
+  "react-dom/client": "https://esm.sh/react-dom@19.1.0/client?deps=react@19.1.0",
+  "@hermes/plugin-sdk": "/sdk-shim.js"
+} }
+</script>
+</head><body class="page-only">
+<div id="wrap"><div id="page"></div><div id="pane"></div></div>
+<script type="module">
+  import { createRoot } from 'react-dom/client'
+  import { makeCtx } from '@hermes/plugin-sdk'
+  import plugin from '/plugin.js'
+  const ctx = makeCtx(plugin.id)
+  plugin.register(ctx)
+  const find = id => ctx.contributions.find(c => c.id === id)
+  window.__hs = { ctx, plugin }
+  const mode = new URLSearchParams(location.search).get('mode') || 'page'
+  document.body.className = mode === 'both' ? '' : mode + '-only'
+  if (mode !== 'pane') createRoot(document.getElementById('page')).render(find('page').render())
+  if (mode !== 'page') createRoot(document.getElementById('pane')).render(find('pane').render())
+  window.__ready = true
+</script>
+</body></html>

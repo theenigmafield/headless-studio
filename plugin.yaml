@@ -1,0 +1,16 @@
+name: headless-studio
+version: 0.1.0
+description: >-
+  A recording studio inside Hermes. Read your script on a teleprompter that paces itself to your
+  words per minute, record straight to disk, and keep every take with notes and a starred pick.
+author: theenigmafield
+license: MIT
+homepage: https://github.com/theenigmafield/headless-studio
+manifest_version: 2
+api_version: 1
+requires_hermes: ">=0.22.2"
+tags: [desktop, audio, recording, teleprompter, voiceover, creator]
+provides_tools:
+  - studio_takes
+provides_hooks: []
+requires_env: []
