@@ -7,6 +7,7 @@
 - 0.2 settings become the first project automatically (scoped to the project's own folder when the
   take folder and script share one).
 - Opening a project no longer creates an empty take folder; it appears with the first recording.
+- If the screen is newer than the running backend (Hermes loads plugin backends when the gateway starts), Studio says to restart the gateway and where the button is, instead of suggesting the plugin is off. `/health` reports the backend version.
 - Tests: end-to-end 54 checks (19 new for projects); `dev/test_projects.py` 36 backend checks.
 - Interrupted takes rebuilt on startup keep their own time, so they sort in place instead of jumping to the top.
 

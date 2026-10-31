@@ -46,6 +46,7 @@ def _shared_home() -> Path:
 
 DATA = _shared_home() / "headless-studio"
 CONF = DATA / "config.json"
+VERSION = "0.3.0"     # keep in step with plugin.yaml and desktop/plugin.js; the UI compares them
 DEFAULTS = {"root": str(Path.home() / "Headless Studio"), "default_dest": "takes", "default_script": ""}
 PROJ_KEYS = ("root", "default_dest", "default_script", "last_dir")
 
@@ -316,7 +317,7 @@ class IdBody(BaseModel):
 # ---------- routes ----------
 @router.get("/health")
 def health() -> dict:
-    return {"ok": True, "plugin": "headless-studio", "root": str(root()), "platform": sys.platform}
+    return {"ok": True, "plugin": "headless-studio", "version": VERSION, "root": str(root()), "platform": sys.platform}
 
 
 @router.get("/font")

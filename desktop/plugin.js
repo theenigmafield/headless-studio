@@ -254,8 +254,17 @@ class Studio {
       this.showDest()
     } catch (e) {
       this.booted = false
-      this.$('.main').innerHTML = `<div class="note warn" style="grid-column:1/-1">The Headless Studio backend is not answering (${esc(errText(e))}).
-        Turn it on with <code>hermes plugins enable headless-studio</code>, then reopen this panel.</div>`
+      // Hermes loads a plugin's backend once, when the gateway starts. After an update the screen is new but
+      // the backend can still be the old one: say so, instead of suggesting the plugin is off.
+      let h = null
+      try { h = await rest('/health') } catch {}
+      this.$('.main').innerHTML = h?.ok && h.version !== VERSION
+        ? `<div class="note warn" style="grid-column:1/-1"><b>Headless Studio was updated to ${VERSION}, but Hermes is still running the
+           ${esc(h.version || 'previous')} backend.</b><br>Restart the gateway once: click <b>Backend</b> in the status bar at the bottom,
+           then the power icon (<b>Restart gateway</b>), and confirm. Closing the window is not enough, because the gateway keeps running. Then reopen Headless Studio.</div>`
+        : `<div class="note warn" style="grid-column:1/-1">The Headless Studio backend is not answering (${esc(errText(e))}).<br>
+           If you just installed or updated it, restart the gateway: <b>Backend</b> in the status bar, then the power icon (<b>Restart gateway</b>).
+           If it is switched off, turn it on in <b>Capabilities → Plugins</b>. Then reopen Headless Studio.</div>`
       return
     }
     this.loadFont()
