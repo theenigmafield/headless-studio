@@ -28,7 +28,15 @@ await ev(`(async()=>{ ${S}.querySelector('[data-t=files]').click(); await new Pr
 await sleep(1500)
 check('reader rendered', (await ev(`${S}.querySelectorAll('.reader .blk').length`)) >= 3, (await ev(`${S}.querySelectorAll('.reader .blk').length`)) + ' blocks')
 check('lexend loaded', await ev(`[...document.fonts].some(f=>f.family==='HSLexend' && f.status==='loaded')`))
+check('split button: scroll | record', (await ev(`[...${S}.querySelectorAll('.tpsplit button')].map(b=>b.className).join(' ')`)) === 'tpmain tpPlay tprec')
 check('teleprompter bar', (await ev(`${$('.tpWpmT')}.textContent`)) === '140 wpm')
+check('directions coloured (orange)', (await ev(`getComputedStyle(${S}.querySelector('.reader .dir')).color`)) === 'rgb(240, 160, 75)', await ev(`getComputedStyle(${S}.querySelector('.reader .dir')).color`))
+check('inline markdown', (await ev(`${S}.querySelector('.reader b')?.textContent`)) === 'one' && (await ev(`!!${S}.querySelector('.reader mark') && !!${S}.querySelector('.reader .c')`)))
+await ev(`(${$('.tpColors')}.checked=false, ${$('.tpColors')}.dispatchEvent(new Event('change')), true)`)
+check('colours can be turned off', (await ev(`getComputedStyle(${S}.querySelector('.reader .dir')).color`)) !== 'rgb(240, 160, 75)')
+await ev(`${S}.querySelector('.tpSw [data-c=teal]').click(), true`)
+check('colour swatch: teal', (await ev(`getComputedStyle(${S}.querySelector('.reader .dir')).color`)) === 'rgb(79, 209, 197)')
+await ev(`${S}.querySelector('.tpSw [data-c=orange]').click(), true`)
 check('mic button or already granted', await ev(`getComputedStyle(${$('.allow')}).display !== 'none' || ${$('.rec')}.style.display === ''`))
 await shot('1-page-idle')
 // allow mic
@@ -47,6 +55,7 @@ check('settings persisted', (await ev(`__hs.ctx.storage.get('tp').wpm`)) === 150
 // record with countdown
 await ev(`(${$('.tpCd')}.value='3', ${$('.tpCd')}.dispatchEvent(new Event('change')), ${$('.tpTop')}.click(), true)`)
 await ev(`${$('.tprec')}.click(), true`); await sleep(1200)
+check('record half shows time while recording', await ev(`${$('.tprec')}.classList.contains('recording')`))
 check('countdown shows', (await ev(`${$('.countdown')}?.textContent`)) != null)
 check('recording file streaming', readdirSync(root + '/takes').some(f => f.endsWith('.wav.recording')), readdirSync(root + '/takes').join(', '))
 await shot('2-countdown')
@@ -80,8 +89,8 @@ check('note saved to disk', Object.values(notes)[0]?.note === 'Best energy on li
 await ev(`${S}.querySelector('.takes .kp').click(), true`); await sleep(800)
 check('star saved', Object.values(JSON.parse(readFileSync(root + '/takes/takes-notes.json', 'utf8')))[0]?.keep === true)
 await shot('4-takes')
-await ev(`(()=>{const i=${S}.querySelector('.takes .rn'); i.value='Ancestry keeper'; i.dispatchEvent(new Event('blur')); return true})()`); await sleep(900)
-check('rename + note follows', existsSync(root + '/takes/Ancestry keeper.wav') && JSON.parse(readFileSync(root + '/takes/takes-notes.json', 'utf8'))['Ancestry keeper.wav']?.note === 'Best energy on line 3')
+await ev(`(()=>{const i=${S}.querySelector('.takes .rn'); i.value='Keeper take'; i.dispatchEvent(new Event('blur')); return true})()`); await sleep(900)
+check('rename + note follows', existsSync(root + '/takes/Keeper take.wav') && JSON.parse(readFileSync(root + '/takes/takes-notes.json', 'utf8'))['Keeper take.wav']?.note === 'Best energy on line 3')
 // path traversal
 check('blocks ../ escape', (await ev(`__hs.ctx.rest('/text?path=../../etc/passwd').then(()=>'leak').catch(e=>String(e.message).slice(0,8))`)) === 'HTTP 403')
 // narrow pane layout

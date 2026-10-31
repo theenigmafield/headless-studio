@@ -9,10 +9,13 @@ with notes and a starred pick, without leaving the chat.
 **Teleprompter**
 - Auto-scroll paced in words per minute (70 to 230), with a breath pause after each line.
 - A reading line, the current line lit and the rest dimmed, and a time-left estimate.
-- Countdown, then the scroll starts when you press Record and pauses when you pause.
+- One split button: the left half scrolls only, the right half (red dot) records and scrolls
+  together after a countdown. Pause pauses both. The top Record button records only, unless you
+  turn on "Top Record button also scrolls".
 - Focus mode, mirror text for prompter glass, line spacing, text width, reading-line height,
   hide directions.
-- Keys: Space start/pause, Left/Right speed, Up/Down nudge, Home, F focus, Esc.
+- Script colours: coloured directions and breath cues, plus inline bold, italic, highlight and colour.
+- Keys: R record and scroll, Space scroll only, Left/Right speed, Up/Down nudge, Home, F focus, Esc.
 
 **Recorder**
 - Raw 32-bit float WAV at the mic's own sample rate, with auto gain and noise suppression off.
@@ -70,8 +73,13 @@ alive beside you.
 (breathe)
 ```
 
-`##` starts a block, `>` lines are directions (shown in the accent colour, never spoken), and
-`(breathe)` is a breath cue. Plain text without headings works too; blank lines split blocks.
+`##` starts a block, `>` lines are directions (coloured, never spoken), and `(breathe)` is a
+breath cue. Plain text without headings works too; blank lines split blocks.
+
+Inside any line you can use `**bold**`, `*italic*`, `==highlight==` and `{teal}coloured words{/}`
+(orange, amber, teal, blue, pink, green, red, purple). Directions are orange by default; pick another
+colour, or turn colours off, in the teleprompter's settings. Each colour has a light-theme and a
+dark-theme shade, so it stays readable in any Hermes theme.
 
 ## Layout
 

@@ -1,5 +1,5 @@
 name: headless-studio
-version: 0.1.0
+version: 0.2.0
 description: >-
   A recording studio inside Hermes. Read your script on a teleprompter that paces itself to your
   words per minute, record straight to disk, and keep every take with notes and a starred pick.

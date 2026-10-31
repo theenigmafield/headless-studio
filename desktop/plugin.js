@@ -6,7 +6,7 @@ import * as React from 'react'
 import { jsx } from 'react/jsx-runtime'
 
 const ID = 'headless-studio'
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 let CTX = null
 let studio = null // one studio per window; the pane and the page share it
 
@@ -90,6 +90,12 @@ const CSS = `
 .hs .tpbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; padding: 6px 10px; border-bottom: 1px solid var(--ui-stroke-tertiary); font-size: 12px; color: var(--ui-text-tertiary); }
 .hs .tpbar .tpmain { font-weight: 700; border-color: var(--ui-accent); min-width: 84px; }
 .hs .tpf { display: flex; align-items: center; gap: 5px; } .hs .tpf input { width: 74px; } .hs .tpf b { color: var(--ui-text-primary); font-weight: 600; min-width: 44px; font-variant-numeric: tabular-nums; }
+.hs .tpsplit { display: inline-flex; }
+.hs .tpsplit .tpPlay { border-radius: 999px 0 0 999px; border-right-width: 0; padding-left: 12px; }
+.hs .tpsplit .tprec { display: inline-flex; align-items: center; gap: 6px; border-radius: 0 999px 999px 0; border-color: var(--ui-accent); padding: 3px 11px 3px 9px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hs .tpsplit .tprec:hover { border-color: var(--ui-red); background: color-mix(in oklab, var(--ui-red) 14%, transparent); }
+.hs .tprec .rdot { width: 10px; height: 10px; border-radius: 50%; background: var(--ui-red); }
+.hs .tprec.recording .rdot { border-radius: 2px; background: currentColor; }
 .hs .tprec.recording { background: var(--ui-red); border-color: var(--ui-red); color: var(--ui-bg-editor, white); font-weight: 700; }
 .hs .tpmore { position: absolute; right: 8px; top: calc(100% + 4px); z-index: 20; width: 280px; display: flex; flex-direction: column; gap: 9px; padding: 11px; border: 1px solid var(--ui-stroke-secondary); border-radius: 11px; background: var(--ui-bg-elevated); color: var(--ui-text-primary); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .hs .tpmore[hidden] { display: none; }
@@ -97,9 +103,15 @@ const CSS = `
 .hs .tpmore input[type=range] { width: 120px; }
 .hs .reader { font-family: "HSLexend", var(--ui-font-sans, system-ui), sans-serif; margin: 0 auto; padding: 0 14px; }
 .hs .reader h1 { font-size: .7em; margin: 0 0 8px; } .hs .reader h2 { font-size: 11px; color: var(--ui-text-tertiary); letter-spacing: .08em; text-transform: uppercase; margin: 18px 0 3px; font-weight: 600; font-family: inherit; }
-.hs .reader .dir { color: var(--ui-accent); font-size: .6em; margin: 2px 0 5px; line-height: 1.4; }
+.hs .reader .dir { color: var(--hs-dir, var(--ui-accent)); font-size: .6em; margin: 2px 0 5px; line-height: 1.4; }
+.hs .reader b, .hs .reader strong { font-weight: 800; } .hs .reader i, .hs .reader em { font-style: italic; }
+.hs .reader mark { color: inherit; background: color-mix(in oklab, var(--hs-hl, #f5c542) 38%, transparent); border-radius: 4px; padding: 0 .12em; }
+.hs .reader .c { color: var(--c); }
+.hs .reader.mono .dir, .hs .reader.mono .br, .hs .reader.mono .c { color: inherit; } .hs .reader.mono .dir { opacity: .7; } .hs .reader.mono mark { background: color-mix(in oklab, currentColor 18%, transparent); }
+.hs .tpmore .sw { display: flex; gap: 5px; } .hs .tpmore .sw button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.hs .tpmore .sw button.on { border-color: var(--ui-text-primary); }
 .hs .reader .ln { line-height: var(--ls, 1.45); font-weight: 500; }
-.hs .reader .br { color: var(--ui-text-tertiary); font-size: .45em; margin-top: 3px; }
+.hs .reader .br { color: var(--hs-br, var(--ui-text-tertiary)); font-size: .45em; margin-top: 3px; }
 .hs .reader .blk { padding: 5px 9px; border-radius: 10px; border-left: 3px solid transparent; cursor: pointer; opacity: .5; transition: opacity .25s, background .25s; }
 .hs .reader .blk.cur { opacity: 1; background: color-mix(in oklab, var(--ui-accent) 12%, transparent); border-left-color: var(--ui-accent); }
 .hs .reader.mirror { transform: scaleX(-1); } .hs .reader.nodirs .dir, .hs .reader.nodirs .br { display: none; }
@@ -113,7 +125,28 @@ const CSS = `
 .hs .empty { padding: 18px; text-align: center; color: var(--ui-text-tertiary); }
 `
 
-const TP_DEF = { size: 30, wpm: 140, breath: 0.6, spacing: 1.45, width: 100, eye: 30, mirror: false, dirs: true, withRec: true, countdown: 3 }
+const TP_DEF = { size: 30, wpm: 140, breath: 0.6, spacing: 1.45, width: 100, eye: 30, mirror: false, dirs: true, withRec: true, countdown: 3, colors: true, dirColor: 'orange' }
+
+// Script colours. Each has a dark-theme and a light-theme shade so it stays readable on both.
+const COLORS = {
+  orange: ['#f0a04b', '#c2620a'], amber: ['#f5c542', '#a16207'], teal: ['#4fd1c5', '#0f766e'],
+  blue: ['#8fb3ff', '#2f5bd3'], pink: ['#f472b6', '#be185d'], green: ['#6ee7a0', '#15803d'], red: ['#ff8080', '#c81e1e'], purple: ['#c4a5ff', '#6d28d9']
+}
+const BREATH = ['#8fb3ff', '#3b5bdb']
+function isDarkBg(el) {
+  for (let n = el; n; n = n.parentElement) {
+    const m = getComputedStyle(n).backgroundColor.match(/[\d.]+/g)
+    if (m && (m.length < 4 || +m[3] > 0.5)) { const [r, g, b] = m.map(Number); return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128 }
+  }
+  return !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+// Light markdown inside a line: **bold**, *italic*, ==highlight==, {orange}coloured words{/}
+function inlineMd(text, dark) {
+  let h = esc(text)
+  h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*(?!\s)(.+?)\*/g, '$1<i>$2</i>').replace(/==(.+?)==/g, '<mark>$1</mark>')
+  h = h.replace(/\{(\w+)\}(.+?)\{\/\}/g, (all, name, inner) => COLORS[name] ? `<span class="c" style="--c:${COLORS[name][dark ? 0 : 1]}">${inner}</span>` : inner)
+  return h
+}
 
 /* =====================================================================================
    Studio: built once, imperatively, and moved between the pane and the page.
@@ -426,7 +459,7 @@ class Studio {
     r.sending = r.sending.then(() => rest('/rec/chunk', { method: 'POST', body: { id, seq: s, data } })).catch(e => this.status('Save problem: ' + errText(e), true))
     return r.sending
   }
-  async toggleRec() {
+  async toggleRec(withScroll) {
     const r = this.rec, b = this.$('.rec')
     if (!r.id) {
       let j
@@ -442,7 +475,8 @@ class Studio {
       }, 1000)
       if (this.el.clientWidth >= 760) this.tab('takes'); else this.loadTakes()
       this.tpSyncRec()
-      if (this.state.tp.withRec && this.$('.reader')) this.tpStart(true)
+      r.scroll = withScroll ?? this.state.tp.withRec
+      if (r.scroll && this.$('.reader')) this.tpStart(true)
     } else {
       clearInterval(r.timer); this.tpStop()
       await new Promise(res => setTimeout(res, 120)); this.flush(); r.buf = null; await r.sending
@@ -459,7 +493,7 @@ class Studio {
     r.paused = !r.paused
     this.$('.pause').textContent = r.paused ? 'Resume' : 'Pause'; this.$('.pause').classList.toggle('on', r.paused)
     if (r.paused) { r.pauseT = performance.now(); this.tpStop(); this.status('Paused. Resume carries on in the same take.') }
-    else { r.pausedMs += performance.now() - r.pauseT; this.status('Recording'); if (this.state.tp.withRec && this.$('.reader')) this.tpStart(false) }
+    else { r.pausedMs += performance.now() - r.pauseT; this.status('Recording'); if (r.scroll && this.$('.reader')) this.tpStart(false) }
   }
 
   /* ---------- teleprompter ---------- */
@@ -473,6 +507,7 @@ class Studio {
     r.insertAdjacentHTML('beforeend', '<div class="tp-pad top"></div>')
     let blk = null
     const nb = () => { blk = document.createElement('div'); blk.className = 'blk'; r.appendChild(blk) }
+    const dark = isDarkBg(host)
     const lines = md.replace(/\r/g, '').split('\n')
     const structured = lines.some(l => /^##\s/.test(l))
     for (const raw of lines) {
@@ -482,22 +517,21 @@ class Studio {
       if (!l) { if (!structured) blk = null; continue }
       if (!blk) nb()
       const d = document.createElement('div')
-      if (l.startsWith('> ')) { d.className = 'dir'; d.textContent = l.slice(2) }
+      if (l.startsWith('> ')) { d.className = 'dir'; d.innerHTML = inlineMd(l.slice(2), dark) }
       else if (/^\(breathe?\)$/i.test(l)) { d.className = 'br'; d.textContent = 'breathe' }
-      else { d.className = 'ln'; d.textContent = l.replace(/^[-*]\s+/, '') }
+      else { d.className = 'ln'; d.innerHTML = inlineMd(l.replace(/^[-*]\s+/, ''), dark) }
       blk.appendChild(d)
     }
     r.insertAdjacentHTML('beforeend', '<div class="tp-end">End of script</div><div class="tp-pad bottom"></div>')
     this.$('.vwrap').insertAdjacentHTML('beforeend', '<div class="eyeline"><span>▶</span></div>')
     host.insertAdjacentHTML('beforebegin', `
     <div class="tpbar">
-      <button class="tpmain tpPlay" title="Start or pause the scroll (Space)">▶ Scroll</button>
+      <span class="tpsplit"><button class="tpmain tpPlay" title="Scroll only, no recording (Space)">▶ Scroll</button><button class="tprec" title="Record and scroll together (R). Countdown, then both run; Pause pauses both." aria-label="Record and scroll"><span class="rdot"></span></button></span>
       <button class="tpTop" title="Back to the top (Home)">⤒</button>
       <label class="tpf" title="Reading pace, words per minute (← →)">Speed <input class="tpWpm" type="range" min="70" max="230" step="5"><b class="tpWpmT"></b></label>
       <label class="tpf" title="Pause at the end of each line">Breath <input class="tpBr" type="range" min="0" max="2.5" step="0.1"><b class="tpBrT"></b></label>
       <button class="tpSm" title="Smaller text">A−</button><button class="tpLg" title="Bigger text">A+</button>
       <span class="tpLeft" style="font-variant-numeric:tabular-nums"></span><span class="sp"></span>
-      <button class="tprec" title="Record (also starts the scroll)">● Rec</button>
       <button class="tpMore" title="Teleprompter settings">⚙</button>
       <button class="tpFocus" title="Prompter only (F, Esc to leave)">⛶</button>
       <div class="tpmore" hidden>
@@ -506,26 +540,34 @@ class Studio {
         <label>Reading line height <input class="tpEye" type="range" min="15" max="60" step="5"></label>
         <label>Countdown <select class="tpCd"><option value="0">none</option><option value="3">3 s</option><option value="5">5 s</option></select></label>
         <label class="ck"><input type="checkbox" class="tpDirs"> Show directions and breaths</label>
-        <label class="ck"><input type="checkbox" class="tpWithRec"> Scroll starts when I press Record</label>
+        <label class="ck"><input type="checkbox" class="tpWithRec"> Top Record button also scrolls</label>
         <label class="ck"><input type="checkbox" class="tpMirror"> Mirror text (prompter glass)</label>
+        <label class="ck"><input type="checkbox" class="tpColors"> Script colours</label>
+        <label>Direction colour <span class="sw tpSw"></span></label>
         <button class="tpReset">Reset settings</button>
-        <div class="tiny mut">Space start/pause · ← → speed · ↑ ↓ nudge · Home top · F focus · Esc leave · click a line to jump</div>
+        <div class="tiny mut">R record + scroll · Space scroll only · ← → speed · ↑ ↓ nudge · Home top · F focus · Esc leave · click a line to jump</div>
       </div>
     </div>`)
     const bind = (cls, key, num = true) => {
       const el = this.$('.' + cls), ck = el.type === 'checkbox'
       ck ? (el.checked = tp[key]) : (el.value = tp[key])
-      el.oninput = el.onchange = () => { tp[key] = ck ? el.checked : num ? +el.value : el.value; this.tpSave(); this.tpApply() }
+      el.oninput = el.onchange = () => { tp[key] = ck ? el.checked : num ? +el.value : el.value; this.tpSave(); this.tpApply(); this.tpSyncRec() }
     }
     bind('tpWpm', 'wpm'); bind('tpBr', 'breath'); bind('tpSp', 'spacing'); bind('tpW', 'width'); bind('tpEye', 'eye')
-    bind('tpCd', 'countdown'); bind('tpDirs', 'dirs'); bind('tpWithRec', 'withRec'); bind('tpMirror', 'mirror')
+    bind('tpCd', 'countdown'); bind('tpDirs', 'dirs'); bind('tpWithRec', 'withRec'); bind('tpMirror', 'mirror'); bind('tpColors', 'colors')
+    const sw = this.$('.tpSw')
+    sw.innerHTML = Object.entries(COLORS).map(([n, c]) => `<button data-c="${n}" title="${n}" style="background:${c[dark ? 0 : 1]}"></button>`).join('')
+    sw.querySelectorAll('button').forEach(b => (b.onclick = () => { tp.dirColor = b.dataset.c; tp.colors = true; this.$('.tpColors').checked = true; this.tpSave(); this.tpApply() }))
     this.$('.tpSm').onclick = () => { tp.size = Math.max(14, tp.size - 3); this.tpSave(); this.tpApply() }
     this.$('.tpLg').onclick = () => { tp.size = Math.min(80, tp.size + 3); this.tpSave(); this.tpApply() }
     this.$('.tpPlay').onclick = () => (this.tpRun || this.tpCount ? this.tpStop() : this.tpStart(true))
     this.$('.tpTop').onclick = () => { this.tpStop(); this.tpPos = 0; this.vb.scrollTop = 0; this.tpHighlight() }
     this.$('.tpMore').onclick = () => { const p = this.$('.tpmore'); p.hidden = !p.hidden; this.$('.tpMore').classList.toggle('on', !p.hidden) }
     this.$('.tpFocus').onclick = () => this.focusMode()
-    this.$('.tprec').onclick = () => (this.mic.running ? this.toggleRec() : this.startMic())
+    this.$('.tprec').onclick = () => {
+      if (!this.mic.running) return this.startMic()
+      this.toggleRec(true)   // the right half always means record AND scroll
+    }
     this.$('.tpReset').onclick = () => { this.state.tp = { ...TP_DEF }; this.tpSave(); const s = this.state.selected; this.openFile({ path: s, name: s.split('/').pop() }) }
     this.vb.onscroll = () => { if (!this.tpRun) { this.tpPos = this.vb.scrollTop; this.tpHighlight() } }
     r.querySelectorAll('.blk').forEach(b => (b.onclick = () => this.tpJump(b)))
@@ -536,7 +578,10 @@ class Studio {
     const r = this.$('.reader'); if (!r) return
     const tp = this.state.tp, vb = this.vb, h = vb.clientHeight
     r.style.fontSize = tp.size + 'px'; r.style.setProperty('--ls', tp.spacing); r.style.maxWidth = tp.width + '%'
-    r.classList.toggle('mirror', tp.mirror); r.classList.toggle('nodirs', !tp.dirs)
+    r.classList.toggle('mirror', tp.mirror); r.classList.toggle('nodirs', !tp.dirs); r.classList.toggle('mono', !tp.colors)
+    const dark = isDarkBg(vb), dc = COLORS[tp.dirColor] || COLORS.orange
+    r.style.setProperty('--hs-dir', dc[dark ? 0 : 1]); r.style.setProperty('--hs-br', BREATH[dark ? 0 : 1])
+    this.el.querySelectorAll('.tpSw button').forEach(b => b.classList.toggle('on', b.dataset.c === (tp.dirColor || 'orange')))
     this.$('.tpWpmT').textContent = tp.wpm + ' wpm'; this.$('.tpBrT').textContent = tp.breath.toFixed(1) + ' s'
     r.querySelector('.tp-pad.top').style.height = Math.round((h * tp.eye) / 100) + 'px'
     r.querySelector('.tp-pad.bottom').style.height = Math.round(h * (1 - tp.eye / 100)) + 'px'
@@ -612,7 +657,8 @@ class Studio {
   tpSyncRec() {
     const b = this.$('.tprec'); if (!b) return
     const on = !!this.rec.id
-    b.textContent = on ? `■ Stop ${this.$('.rec .t').textContent}` : '● Rec'; b.classList.toggle('recording', on)
+    b.innerHTML = `<span class="rdot"></span>${on ? this.$('.rec .t').textContent : ''}`; b.classList.toggle('recording', on)
+    b.title = on ? 'Stop recording (R)' : 'Record and scroll together (R). Countdown, then both run; Pause pauses both.'
   }
   onKey(ev) {
     if (!this.$('.reader') || /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return
@@ -627,6 +673,7 @@ class Studio {
       const nx = blks[Math.max(0, Math.min(blks.length - 1, i + (k === 'ArrowDown' ? 1 : -1)))]; if (nx) this.tpJump(nx.el)
     } else if (k === 'Home') { ev.preventDefault(); this.$('.tpTop').click() }
     else if (k === 'f' || k === 'F') this.focusMode()
+    else if ((k === 'r' || k === 'R') && !ev.metaKey && !ev.ctrlKey) { ev.preventDefault(); this.$('.tprec').click() }
     else if (k === 'Escape') this.focusMode(false)
   }
 

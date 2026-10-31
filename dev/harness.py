@@ -23,6 +23,10 @@ args = ap.parse_args()
 spec = importlib.util.spec_from_file_location("hs_api", REPO / "dashboard" / "plugin_api.py")
 api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
+script = Path(args.root) / "script" / "Reading script.md"
+if not script.exists():
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text((HERE / "sample-script.md").read_text())
 api.DATA.mkdir(parents=True, exist_ok=True)
 api.CONF.write_text(json.dumps({"root": args.root, "default_dest": "takes", "default_script": ""}))
 
